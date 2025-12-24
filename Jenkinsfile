@@ -21,7 +21,7 @@ pipeline {
                 withCredentials([usernamePassword(credentialsId: "${GITHUB_CREDENTIALS_ID}",
                     usernameVariable: 'GITHUB_USER',
                     passwordVariable: 'GITHUB_PASS')]) {
-                    echo "🔐 GitHub credentials loaded for user: ${env.GITHUB_USER}"
+                    echo "🔐 GitHub credentials loaded for user: ${GITHUB_USER}"
                 }
             }
         }
@@ -31,6 +31,10 @@ pipeline {
                 withCredentials([usernamePassword(credentialsId: "${DOCKERHUB_CREDENTIALS_ID}",
                     usernameVariable: 'DOCKERHUB_USER',
                     passwordVariable: 'DOCKERHUB_PASS')]) {
+                    script {
+                        // ✅ Assign to env so later stages can use it
+                        env.DOCKERHUB_USER = DOCKERHUB_USER
+                    }
                     sh '''
                         echo $DOCKERHUB_PASS | docker login -u $DOCKERHUB_USER --password-stdin
                     '''
@@ -41,7 +45,6 @@ pipeline {
         stage('Build & Tag Images') {
             steps {
                 script {
-                    // ✅ Use env.DOCKERHUB_USER to avoid MissingPropertyException
                     env.FRONTEND_TAG_DH = "${env.DOCKERHUB_USER}/jenkins-day65:frontend-${IMAGE_TAG}"
                     env.BACKEND_TAG_DH  = "${env.DOCKERHUB_USER}/jenkins-day65:backend-${IMAGE_TAG}"
 
