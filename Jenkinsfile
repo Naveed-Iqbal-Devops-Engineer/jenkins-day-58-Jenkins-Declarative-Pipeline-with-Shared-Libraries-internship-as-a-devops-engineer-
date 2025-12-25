@@ -5,7 +5,7 @@ pipeline {
     environment {
         BRANCH_NAME  = "${env.GIT_BRANCH ?: 'main'}"
         IMAGE_TAG    = "${BRANCH_NAME}-${env.BUILD_NUMBER}"
-        COMPOSE_FILE = "docker-compose.${BRANCH_NAME}.yml"
+        COMPOSE_FILE = "docker-compose.yml"
     }
 
     stages {
