@@ -4,7 +4,7 @@ pipeline {
 
     environment {
         BRANCH_NAME  = "${env.GIT_BRANCH ?: 'main'}"
-        IMAGE_TAG    = "${BRANCH_NAME}-${env.BUILD_NUMBER}"
+        IMAGE_TAG    = "${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
         COMPOSE_FILE = "docker-compose.yml"
     }
 
@@ -21,7 +21,7 @@ pipeline {
         }
         stage('Build Images') {
             steps {
-                buildImages('./backend', './frontend', IMAGE_TAG)
+                buildImages('./backend', './frontend', env.IMAGE_TAG)
             }
         }
         stage('Push Images') {
@@ -37,10 +37,10 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
-                    if (BRANCH_NAME == 'stg' || BRANCH_NAME == 'prod') {
-                        input message: "Deploy to ${BRANCH_NAME}?", ok: "Deploy"
+                    if (env.BRANCH_NAME == 'stg' || env.BRANCH_NAME == 'prod') {
+                        input message: "Deploy to ${env.BRANCH_NAME}?", ok: "Deploy"
                     }
-                    deployApp(COMPOSE_FILE, BRANCH_NAME)
+                    deployApp(env.COMPOSE_FILE, env.BRANCH_NAME)
                 }
             }
         }
@@ -53,10 +53,10 @@ pipeline {
 
     post {
         success {
-            echo "✅ ${BRANCH_NAME} environment deployed successfully using Docker Hub images!"
+            echo "✅ ${env.BRANCH_NAME} environment deployed successfully using Docker Hub images!"
         }
         failure {
-            echo "❌ Deployment failed for ${BRANCH_NAME}. Check logs."
+            echo "❌ Deployment failed for ${env.BRANCH_NAME}. Check logs."
         }
     }
 }
