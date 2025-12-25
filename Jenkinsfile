@@ -3,14 +3,15 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_TAG    = "${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
-        COMPOSE_FILE = "docker-compose.${env.BRANCH_NAME}.yml"
+        BRANCH_NAME  = "${env.GIT_BRANCH ?: 'main'}"
+        IMAGE_TAG    = "${BRANCH_NAME}-${env.BUILD_NUMBER}"
+        COMPOSE_FILE = "docker-compose.${BRANCH_NAME}.yml"
     }
 
     stages {
         stage('Checkout') {
             steps {
-                checkoutsource()
+                checkoutSource()  // ✅ Capital S
             }
         }
         stage('Docker Login') {
@@ -36,10 +37,10 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
-                    if (env.BRANCH_NAME == 'stg' || env.BRANCH_NAME == 'prod') {
-                        input message: "Deploy to ${env.BRANCH_NAME}?", ok: "Deploy"
+                    if (BRANCH_NAME == 'stg' || BRANCH_NAME == 'prod') {
+                        input message: "Deploy to ${BRANCH_NAME}?", ok: "Deploy"
                     }
-                    deployApp(COMPOSE_FILE, env.BRANCH_NAME)
+                    deployApp(COMPOSE_FILE, BRANCH_NAME)
                 }
             }
         }
