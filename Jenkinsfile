@@ -1,114 +1,58 @@
+@Library('sharedLib') _
 pipeline {
     agent any
 
     environment {
-        GITHUB_CREDENTIALS_ID     = 'github56'
-        DOCKERHUB_CREDENTIALS_ID  = 'docker56'
-        BRANCH_NAME               = "${env.BRANCH_NAME}"
-        IMAGE_TAG                 = "${BRANCH_NAME}-${BUILD_NUMBER}"
+        IMAGE_TAG    = "${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
+        COMPOSE_FILE = "docker-compose.${env.BRANCH_NAME}.yml"
     }
 
     stages {
-
-        stage('Checkout Source') {
+        stage('Checkout') {
             steps {
-                checkout scm
+                checkoutsource()
             }
         }
-
-        stage('GitHub Auth (Optional)') {
+        stage('Docker Login') {
             steps {
-                withCredentials([usernamePassword(credentialsId: "${GITHUB_CREDENTIALS_ID}",
-                    usernameVariable: 'GITHUB_USER',
-                    passwordVariable: 'GITHUB_PASS')]) {
-                    echo "🔐 GitHub credentials loaded for user: ${GITHUB_USER}"
-                }
+                dockerLogin('docker56')
             }
         }
-
-        stage('Docker Hub Login') {
+        stage('Build Images') {
             steps {
-                withCredentials([usernamePassword(credentialsId: "${DOCKERHUB_CREDENTIALS_ID}",
-                    usernameVariable: 'DOCKERHUB_USER',
-                    passwordVariable: 'DOCKERHUB_PASS')]) {
-                    script {
-                        // ✅ Assign to env so later stages can use it
-                        env.DOCKERHUB_USER = DOCKERHUB_USER
+                buildImages('./backend', './frontend', IMAGE_TAG)
+            }
+        }
+        stage('Push Images') {
+            steps {
+                pushImages()
+            }
+        }
+        stage('Prepare .env') {
+            steps {
+                prepareEnvFile()
+            }
+        }
+        stage('Deploy') {
+            steps {
+                script {
+                    if (env.BRANCH_NAME == 'stg' || env.BRANCH_NAME == 'prod') {
+                        input message: "Deploy to ${env.BRANCH_NAME}?", ok: "Deploy"
                     }
-                    sh '''
-                        echo $DOCKERHUB_PASS | docker login -u $DOCKERHUB_USER --password-stdin
-                    '''
+                    deployApp(COMPOSE_FILE, env.BRANCH_NAME)
                 }
             }
         }
-
-        stage('Build & Tag Images') {
+        stage('Cleanup') {
             steps {
-                script {
-                    env.FRONTEND_TAG_DH = "${env.DOCKERHUB_USER}/jenkins-day65:frontend-${IMAGE_TAG}"
-                    env.BACKEND_TAG_DH  = "${env.DOCKERHUB_USER}/jenkins-day65:backend-${IMAGE_TAG}"
-
-                    sh """
-                        docker build -t ${BACKEND_TAG_DH} ./backend
-                        docker build -t ${FRONTEND_TAG_DH} ./frontend
-                    """
-                }
-            }
-        }
-
-        stage('Push Images to Docker Hub') {
-            steps {
-                sh """
-                    docker push ${BACKEND_TAG_DH}
-                    docker push ${FRONTEND_TAG_DH}
-                """
-            }
-        }
-
-        stage('Prepare .env for Compose') {
-            steps {
-                script {
-                    writeFile file: '.env', text: """BACKEND_IMAGE=${BACKEND_TAG_DH}
-FRONTEND_IMAGE=${FRONTEND_TAG_DH}
-"""
-                }
-            }
-        }
-
-        stage('Approval for Staging / Prod Deploy') {
-            when {
-                anyOf {
-                    branch 'stg'
-                    branch 'prod'
-                }
-            }
-            steps {
-                input message: "Deploy to ${BRANCH_NAME} environment?", ok: "Yes, Deploy"
-            }
-        }
-
-        stage('Deploy Environment') {
-            steps {
-                sh """
-                    docker-compose --env-file .env down
-                    docker-compose --env-file .env pull
-                    docker-compose --env-file .env up -d --remove-orphans
-                """
-            }
-        }
-
-        stage('Cleanup Local Images') {
-            steps {
-                sh """
-                    docker rmi ${BACKEND_TAG_DH} ${FRONTEND_TAG_DH} || true
-                """
+                cleanupImages()
             }
         }
     }
 
     post {
         success {
-            echo "✅ ${BRANCH_NAME} environment deployed successfully using Docker Hub repo: jenkins-day65!"
+            echo "✅ ${BRANCH_NAME} environment deployed successfully using Docker Hub images!"
         }
         failure {
             echo "❌ Deployment failed for ${BRANCH_NAME}. Check logs."
